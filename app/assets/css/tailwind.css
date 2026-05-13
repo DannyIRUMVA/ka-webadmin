@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply bg-canvas-light text-ink-light antialiased transition-colors duration-300 dark:bg-canvas-dark dark:text-ink-dark;
+    background-image: radial-gradient(circle at top, rgba(252, 177, 22, 0.08), transparent 30%);
+  }
+
+  ::selection {
+    @apply bg-brand/25 text-inherit;
+  }
+}
+
+@layer components {
+  .surface-card {
+    @apply rounded-[1.75rem] border border-line-light bg-panel-light dark:border-line-dark dark:bg-panel-dark;
+  }
+
+  .control-button {
+    @apply inline-flex items-center rounded-2xl border border-line-light bg-panel-light px-4 py-3 text-sm font-medium text-muted-light transition hover:border-brand/30 hover:text-ink-light dark:border-line-dark dark:bg-panel-dark dark:text-muted-dark dark:hover:text-ink-dark;
+  }
+
+  .field-input {
+    @apply rounded-2xl border border-line-light bg-panel-light px-4 py-3 text-sm text-ink-light outline-none transition placeholder:text-muted-light/80 focus:border-brand dark:border-line-dark dark:bg-panel-dark dark:text-ink-dark dark:placeholder:text-muted-dark/80;
+  }
+}
