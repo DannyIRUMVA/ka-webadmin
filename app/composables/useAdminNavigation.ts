@@ -1,13 +1,13 @@
 export const useAdminNavigation = () => {
   return [
-    { name: 'Overview', to: '/dashboard', badge: 'Live' },
-    { name: 'Transactions', to: '/transactions', badge: '728' },
-    { name: 'Creators', to: '/creators', badge: '362' },
-    { name: 'Audience', to: '/audience', badge: '679' },
-    { name: 'Finance', to: '/finance', badge: '1417' },
-    { name: 'Payouts', to: '/payouts', badge: 'Queue' },
-    { name: 'Content', to: '/content', badge: '24' },
-    { name: 'System', to: '/system', badge: 'Live' },
-    { name: 'Settings', to: '/settings', badge: 'Config' }
+    { name: 'Overview', to: '/dashboard', icon: 'dashboard' as const },
+    { name: 'Transactions', to: '/transactions', icon: 'transactions' as const },
+    { name: 'Creators', to: '/creators', icon: 'creators' as const },
+    { name: 'Audience', to: '/audience', icon: 'audience' as const },
+    { name: 'Finance', to: '/finance', icon: 'finance' as const },
+    { name: 'Payouts', to: '/payouts', icon: 'payouts' as const },
+    { name: 'Content', to: '/content', icon: 'content' as const },
+    { name: 'System', to: '/system', icon: 'system' as const },
+    { name: 'Settings', to: '/settings', icon: 'settings' as const }
   ]
 }

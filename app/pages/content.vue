@@ -17,6 +17,22 @@ interface MovieRow {
   updated_at: string | null
 }
 
+interface ContentSummaryResponse {
+  mode: 'verified-admin' | 'session-scoped'
+  metrics: {
+    products: number
+    activeProducts: number
+    movies: number
+    publishedMovies: number
+    articles: number
+    publishedArticles: number
+    guides: number
+    publishedGuides: number
+  }
+  recentProducts: ProductRow[]
+  recentMovies: MovieRow[]
+}
+
 const { $supabase } = useNuxtApp()
 const { onAction, downloadJson } = useAdminPageActions()
 
@@ -36,12 +52,6 @@ const metrics = reactive({
   publishedGuides: 0
 })
 
-const getCount = async (builder: Promise<{ count: number | null, error: { message: string } | null }>) => {
-  const { count, error } = await builder
-  if (error) throw new Error(error.message)
-  return count ?? 0
-}
-
 const loadContent = async () => {
   if (!import.meta.client) return
 
@@ -49,35 +59,27 @@ const loadContent = async () => {
   errorMessage.value = null
 
   try {
-    const [products, activeProducts, movies, publishedMovies, articles, publishedArticles, guides, publishedGuides, productsResult, moviesResult] = await Promise.all([
-      getCount($supabase.from('products').select('*', { count: 'exact', head: true })),
-      getCount($supabase.from('products').select('*', { count: 'exact', head: true }).eq('is_active', true)),
-      getCount($supabase.from('movies').select('*', { count: 'exact', head: true })),
-      getCount($supabase.from('movies').select('*', { count: 'exact', head: true }).eq('is_published', true)),
-      getCount($supabase.from('kakofi_articles').select('*', { count: 'exact', head: true })),
-      getCount($supabase.from('kakofi_articles').select('*', { count: 'exact', head: true }).eq('status', 'published')),
-      getCount($supabase.from('kakofi_guides').select('*', { count: 'exact', head: true })),
-      getCount($supabase.from('kakofi_guides').select('*', { count: 'exact', head: true }).eq('status', 'published')),
-      $supabase.from('products').select('id, name, is_active, created_at').order('created_at', { ascending: false }).limit(5),
-      $supabase.from('movies').select('id, title, is_published, updated_at').order('updated_at', { ascending: false }).limit(5)
-    ])
+    const { data: sessionData, error: sessionError } = await $supabase.auth.getSession()
 
-    if (productsResult.error) throw new Error(productsResult.error.message)
-    if (moviesResult.error) throw new Error(moviesResult.error.message)
+    if (sessionError) {
+      throw new Error(sessionError.message)
+    }
 
-    Object.assign(metrics, {
-      products,
-      activeProducts,
-      movies,
-      publishedMovies,
-      articles,
-      publishedArticles,
-      guides,
-      publishedGuides
+    const accessToken = sessionData.session?.access_token
+
+    if (!accessToken) {
+      throw new Error('Missing admin session. Please sign in again.')
+    }
+
+    const data = await $fetch<ContentSummaryResponse>('/api/content-summary', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
     })
 
-    recentProducts.value = (productsResult.data ?? []) as ProductRow[]
-    recentMovies.value = (moviesResult.data ?? []) as MovieRow[]
+    Object.assign(metrics, data.metrics)
+    recentProducts.value = data.recentProducts
+    recentMovies.value = data.recentMovies
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Unable to load content data.'
   } finally {

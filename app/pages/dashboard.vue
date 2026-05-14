@@ -25,6 +25,31 @@ type HealthPayload = {
 
 const AUTO_REFRESH_MS = 45000
 
+interface DashboardSummaryResponse {
+  mode: 'verified-admin' | 'session-scoped'
+  metrics: {
+    profilesTotal: number
+    creatorsTotal: number
+    transactionsTotal: number
+    guestsTotal: number
+    verifiedAdmins: number
+    kycPending: number
+    kycUnverified: number
+    kycVerified: number
+    subscriptionsActive: number
+    subscriptionsFreemium: number
+    subscriptionsPro: number
+    productsTotal: number
+    moviesTotal: number
+    moviesPublished: number
+    articlesPublished: number
+    guidesPublished: number
+    ledgerEntriesTotal: number
+    transactionsSuccessful: number
+    payoutRequestsTotal: number
+  }
+}
+
 const { $supabase } = useNuxtApp()
 const { onAction, downloadJson } = useAdminPageActions()
 
@@ -59,12 +84,6 @@ const metrics = reactive({
 
 let refreshInterval: ReturnType<typeof setInterval> | null = null
 
-const getCount = async (builder: Promise<{ count: number | null, error: { message: string } | null }>) => {
-  const { count, error } = await builder
-  if (error) throw new Error(error.message)
-  return count ?? 0
-}
-
 const loadDashboard = async (background = false) => {
   if (!import.meta.client) return
 
@@ -77,69 +96,25 @@ const loadDashboard = async (background = false) => {
   errorMessage.value = null
 
   try {
-    const [
-      profilesTotal,
-      creatorsTotal,
-      transactionsTotal,
-      guestsTotal,
-      verifiedAdmins,
-      kycPending,
-      kycUnverified,
-      kycVerified,
-      subscriptionsActive,
-      subscriptionsFreemium,
-      subscriptionsPro,
-      productsTotal,
-      moviesTotal,
-      moviesPublished,
-      articlesPublished,
-      guidesPublished,
-      ledgerEntriesTotal,
-      transactionsSuccessful,
-      payoutRequestsTotal
-    ] = await Promise.all([
-      getCount($supabase.from('profiles').select('*', { count: 'exact', head: true })),
-      getCount($supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'creator')),
-      getCount($supabase.from('transactions').select('*', { count: 'exact', head: true })),
-      getCount($supabase.from('guests').select('*', { count: 'exact', head: true })),
-      getCount($supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('verified_by_admin', true)),
-      getCount($supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('kyc_status', 'pending')),
-      getCount($supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('kyc_status', 'unverified')),
-      getCount($supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('kyc_status', 'verified')),
-      getCount($supabase.from('subscriptions').select('*', { count: 'exact', head: true }).eq('status', 'active')),
-      getCount($supabase.from('subscriptions').select('*', { count: 'exact', head: true }).eq('plan_name', 'Freemium')),
-      getCount($supabase.from('subscriptions').select('*', { count: 'exact', head: true }).eq('plan_name', 'Pro')),
-      getCount($supabase.from('products').select('*', { count: 'exact', head: true })),
-      getCount($supabase.from('movies').select('*', { count: 'exact', head: true })),
-      getCount($supabase.from('movies').select('*', { count: 'exact', head: true }).eq('is_published', true)),
-      getCount($supabase.from('kakofi_articles').select('*', { count: 'exact', head: true }).eq('status', 'published')),
-      getCount($supabase.from('kakofi_guides').select('*', { count: 'exact', head: true }).eq('status', 'published')),
-      getCount($supabase.from('ledger_entries').select('*', { count: 'exact', head: true })),
-      getCount($supabase.from('transactions').select('*', { count: 'exact', head: true }).eq('status', 'successful')),
-      getCount($supabase.from('payout_requests').select('*', { count: 'exact', head: true }))
-    ])
+    const { data: sessionData, error: sessionError } = await $supabase.auth.getSession()
 
-    Object.assign(metrics, {
-      profilesTotal,
-      creatorsTotal,
-      transactionsTotal,
-      guestsTotal,
-      verifiedAdmins,
-      kycPending,
-      kycUnverified,
-      kycVerified,
-      subscriptionsActive,
-      subscriptionsFreemium,
-      subscriptionsPro,
-      productsTotal,
-      moviesTotal,
-      moviesPublished,
-      articlesPublished,
-      guidesPublished,
-      ledgerEntriesTotal,
-      transactionsSuccessful,
-      payoutRequestsTotal
+    if (sessionError) {
+      throw new Error(sessionError.message)
+    }
+
+    const accessToken = sessionData.session?.access_token
+
+    if (!accessToken) {
+      throw new Error('Missing admin session. Please sign in again.')
+    }
+
+    const data = await $fetch<DashboardSummaryResponse>('/api/dashboard-summary', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
     })
+
+    Object.assign(metrics, data.metrics)
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Unable to load dashboard data.'
   } finally {

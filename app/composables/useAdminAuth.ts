@@ -14,6 +14,7 @@ let authListenerRegistered = false
 
 export const useAdminAuth = () => {
   const { $supabase } = useNuxtApp()
+  const config = useRuntimeConfig()
 
   const user = useState<User | null>('admin-auth:user', () => null)
   const profile = useState<AdminProfile | null>('admin-auth:profile', () => null)
@@ -106,7 +107,9 @@ export const useAdminAuth = () => {
       return
     }
 
-    const redirectTarget = `${window.location.origin}/auth/callback?redirect=${encodeURIComponent(redirectPath)}`
+    const configuredBaseUrl = config.public.adminBaseUrl?.trim().replace(/\/$/, '')
+    const callbackBaseUrl = configuredBaseUrl || window.location.origin
+    const redirectTarget = `${callbackBaseUrl}/auth/callback?redirect=${encodeURIComponent(redirectPath)}`
     const { error } = await $supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {

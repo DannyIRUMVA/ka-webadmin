@@ -16,6 +16,16 @@ interface TransactionRow {
   provider_transaction_id?: string | null
 }
 
+interface TransactionsSummaryResponse {
+  mode: 'verified-admin' | 'session-scoped'
+  metrics: {
+    total: number
+    successful: number
+    completed: number
+  }
+  recentTransactions: TransactionRow[]
+}
+
 const { $supabase } = useNuxtApp()
 const { onAction, downloadJson } = useAdminPageActions()
 
@@ -29,12 +39,6 @@ const metrics = reactive({
   completed: 0
 })
 
-const getCount = async (builder: Promise<{ count: number | null, error: { message: string } | null }>) => {
-  const { count, error } = await builder
-  if (error) throw new Error(error.message)
-  return count ?? 0
-}
-
 const loadTransactions = async () => {
   if (!import.meta.client) return
 
@@ -42,21 +46,26 @@ const loadTransactions = async () => {
   errorMessage.value = null
 
   try {
-    const [total, successful, completed, recentResult] = await Promise.all([
-      getCount($supabase.from('transactions').select('*', { count: 'exact', head: true })),
-      getCount($supabase.from('transactions').select('*', { count: 'exact', head: true }).eq('status', 'successful')),
-      getCount($supabase.from('transactions').select('*', { count: 'exact', head: true }).eq('status', 'completed')),
-      $supabase
-        .from('transactions')
-        .select('id, amount, currency, status, created_at, creator_id, product_id, movie_id, guest_id, provider_transaction_id')
-        .order('created_at', { ascending: false })
-        .limit(8)
-    ])
+    const { data: sessionData, error: sessionError } = await $supabase.auth.getSession()
 
-    if (recentResult.error) throw new Error(recentResult.error.message)
+    if (sessionError) {
+      throw new Error(sessionError.message)
+    }
 
-    Object.assign(metrics, { total, successful, completed })
-    recentTransactions.value = (recentResult.data ?? []) as TransactionRow[]
+    const accessToken = sessionData.session?.access_token
+
+    if (!accessToken) {
+      throw new Error('Missing admin session. Please sign in again.')
+    }
+
+    const data = await $fetch<TransactionsSummaryResponse>('/api/transactions-summary', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    })
+
+    Object.assign(metrics, data.metrics)
+    recentTransactions.value = data.recentTransactions
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Unable to load transaction data.'
   } finally {
@@ -85,8 +94,8 @@ const fields = [
 
 const notes = [
   'This page is now using read-only Supabase transaction data.',
-  'Most useful columns are status, amount, creator, asset type, and created_at.',
-  'Exception review should focus on rare non-standard rows.'
+  'Paypack transactions are expected in RWF and Stripe transactions are expected in USD.',
+  'Exception review should focus on rare non-standard rows or provider/currency mismatches.'
 ]
 
 const formatAmount = (amount: number | string, currency: string | null) => {
@@ -108,6 +117,20 @@ const assetType = (row: TransactionRow) => {
 }
 
 const shortId = (value: string | null) => value ? value.slice(0, 8) : '—'
+
+const transactionProvider = (row: TransactionRow) => {
+  const id = row.provider_transaction_id || ''
+  if (id.startsWith('cs_')) return 'Stripe'
+  if (id.startsWith('PPK_')) return 'Paypack'
+  return 'Other'
+}
+
+const expectedCurrency = (row: TransactionRow) => {
+  const provider = transactionProvider(row)
+  if (provider === 'Stripe') return 'USD'
+  if (provider === 'Paypack') return 'RWF'
+  return row.currency || '—'
+}
 
 onAction('transactions-export', () => {
   downloadJson('transactions-summary.json', {
@@ -167,7 +190,10 @@ onMounted(() => {
               <div>
                 <p class="text-sm font-medium text-slate-900 dark:text-white">#{{ row.id }} • {{ assetType(row) }}</p>
                 <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                  Status: {{ row.status || '—' }} • Creator: {{ shortId(row.creator_id) }} • Guest: {{ shortId(row.guest_id) }}
+                  Status: {{ row.status || '—' }} • Provider: {{ transactionProvider(row) }} • Expected currency: {{ expectedCurrency(row) }}
+                </p>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  Creator: {{ shortId(row.creator_id) }} • Guest: {{ shortId(row.guest_id) }}
                 </p>
               </div>
               <div class="text-sm lg:text-right">

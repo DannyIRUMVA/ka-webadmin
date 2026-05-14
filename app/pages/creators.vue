@@ -3,6 +3,18 @@ definePageMeta({
   layout: 'admin'
 })
 
+interface CreatorsSummaryResponse {
+  mode: 'verified-admin' | 'session-scoped'
+  metrics: {
+    creatorsTotal: number
+    clientsTotal: number
+    verifiedAdmins: number
+    kycPending: number
+    kycUnverified: number
+    kycVerified: number
+  }
+}
+
 const { $supabase } = useNuxtApp()
 const { onAction, downloadJson } = useAdminPageActions()
 
@@ -18,12 +30,6 @@ const metrics = reactive({
   kycVerified: 0
 })
 
-const getCount = async (builder: Promise<{ count: number | null, error: { message: string } | null }>) => {
-  const { count, error } = await builder
-  if (error) throw new Error(error.message)
-  return count ?? 0
-}
-
 const loadCreatorsSummary = async () => {
   if (!import.meta.client) return
 
@@ -31,16 +37,25 @@ const loadCreatorsSummary = async () => {
   errorMessage.value = null
 
   try {
-    const [creatorsTotal, clientsTotal, verifiedAdmins, kycPending, kycUnverified, kycVerified] = await Promise.all([
-      getCount($supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'creator')),
-      getCount($supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'client')),
-      getCount($supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('verified_by_admin', true)),
-      getCount($supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('kyc_status', 'pending')),
-      getCount($supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('kyc_status', 'unverified')),
-      getCount($supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('kyc_status', 'verified'))
-    ])
+    const { data: sessionData, error: sessionError } = await $supabase.auth.getSession()
 
-    Object.assign(metrics, { creatorsTotal, clientsTotal, verifiedAdmins, kycPending, kycUnverified, kycVerified })
+    if (sessionError) {
+      throw new Error(sessionError.message)
+    }
+
+    const accessToken = sessionData.session?.access_token
+
+    if (!accessToken) {
+      throw new Error('Missing admin session. Please sign in again.')
+    }
+
+    const data = await $fetch<CreatorsSummaryResponse>('/api/creators-summary', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    })
+
+    Object.assign(metrics, data.metrics)
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Unable to load creator summary.'
   } finally {
