@@ -3,79 +3,116 @@ definePageMeta({
   layout: 'admin'
 })
 
-const vendors = [
-  { name: 'Kigali Bites', category: 'Fast casual', rating: '4.8', orders: '422 today', status: 'Top performer' },
-  { name: 'Biryogo Kitchen', category: 'Local cuisine', rating: '4.6', orders: '316 today', status: 'Growing' },
-  { name: 'Remera Grill', category: 'Grill house', rating: '4.4', orders: '280 today', status: 'Monitor prep' },
-  { name: 'Kacyiru Express', category: 'Quick meals', rating: '4.7', orders: '245 today', status: 'Stable' }
+const { $supabase } = useNuxtApp()
+const { onAction, downloadJson } = useAdminPageActions()
+
+const loading = ref(true)
+const errorMessage = ref<string | null>(null)
+
+const metrics = reactive({
+  creatorsTotal: 0,
+  clientsTotal: 0,
+  verifiedAdmins: 0,
+  kycPending: 0,
+  kycUnverified: 0,
+  kycVerified: 0
+})
+
+const getCount = async (builder: Promise<{ count: number | null, error: { message: string } | null }>) => {
+  const { count, error } = await builder
+  if (error) throw new Error(error.message)
+  return count ?? 0
+}
+
+const loadCreatorsSummary = async () => {
+  if (!import.meta.client) return
+
+  loading.value = true
+  errorMessage.value = null
+
+  try {
+    const [creatorsTotal, clientsTotal, verifiedAdmins, kycPending, kycUnverified, kycVerified] = await Promise.all([
+      getCount($supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'creator')),
+      getCount($supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'client')),
+      getCount($supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('verified_by_admin', true)),
+      getCount($supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('kyc_status', 'pending')),
+      getCount($supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('kyc_status', 'unverified')),
+      getCount($supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('kyc_status', 'verified'))
+    ])
+
+    Object.assign(metrics, { creatorsTotal, clientsTotal, verifiedAdmins, kycPending, kycUnverified, kycVerified })
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Unable to load creator summary.'
+  } finally {
+    loading.value = false
+  }
+}
+
+const stats = computed(() => [
+  { label: 'Creator profiles', value: String(metrics.creatorsTotal), note: 'Main account type' },
+  { label: 'Client profiles', value: String(metrics.clientsTotal), note: 'Small minority of profiles' },
+  { label: 'Verified admins', value: String(metrics.verifiedAdmins), note: 'Limited admin access' }
+])
+
+const verification = computed(() => [
+  { label: 'KYC pending', value: String(metrics.kycPending) },
+  { label: 'KYC unverified', value: String(metrics.kycUnverified) },
+  { label: 'KYC verified', value: String(metrics.kycVerified) }
+])
+
+const fields = [
+  'verified_by_admin',
+  'kyc_status',
+  'badge_type',
+  'stripe_customer_id'
 ]
 
-const onboarding = [
-  { stage: 'Documents submitted', count: '09' },
-  { stage: 'Kitchen inspection', count: '04' },
-  { stage: 'Menu setup', count: '06' },
-  { stage: 'Ready to launch', count: '03' }
-]
+onAction('creators-export', () => {
+  downloadJson('creators-summary.json', {
+    exportedAt: new Date().toISOString(),
+    metrics: { ...metrics },
+    fields
+  })
+})
+
+onMounted(() => {
+  loadCreatorsSummary()
+})
 </script>
 
 <template>
-  <div>
-    <section class="mt-8 grid gap-4 xl:grid-cols-[1.2fr_1fr]">
-      <div class="rounded-[2rem] border border-brand/20 bg-gradient-to-br from-brand/20 via-brand/10 to-transparent p-6 dark:from-brand/15 dark:via-brand/8">
-        <p class="text-xs uppercase tracking-[0.28em] text-brand">Partner growth</p>
-        <h3 class="mt-4 text-3xl font-semibold">Vendor network quality remains healthy across active zones.</h3>
-        <p class="mt-4 max-w-2xl text-sm leading-7 text-muted-light dark:text-muted-dark">
-          Use this page as a starting UI for onboarding, performance analysis, and vendor relationship management.
-        </p>
-      </div>
+  <div class="space-y-6">
+    <div v-if="errorMessage" class="rounded-3xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">
+      {{ errorMessage }}
+    </div>
 
-      <div class="grid gap-4 sm:grid-cols-2">
-        <div class="rounded-[2rem] border border-line-light bg-panel-light p-6 dark:border-line-dark dark:bg-panel-dark">
-          <p class="text-sm text-muted-light dark:text-muted-dark">Active vendors</p>
-          <p class="mt-3 text-3xl font-semibold">126</p>
-        </div>
-        <div class="rounded-[2rem] border border-line-light bg-panel-light p-6 dark:border-line-dark dark:bg-panel-dark">
-          <p class="text-sm text-muted-light dark:text-muted-dark">Pending onboarding</p>
-          <p class="mt-3 text-3xl font-semibold">22</p>
-        </div>
-      </div>
-    </section>
+    <div v-if="loading" class="rounded-3xl border border-slate-200 bg-white p-5 text-sm text-slate-500 dark:border-white/10 dark:bg-[#111214] dark:text-slate-400">
+      Loading creator summary...
+    </div>
 
-    <section class="mt-6 grid gap-4 2xl:grid-cols-[1.55fr_0.9fr]">
-      <div class="rounded-[2rem] border border-line-light bg-panel-light p-6 dark:border-line-dark dark:bg-panel-dark">
-        <div class="flex items-center justify-between">
-          <h3 class="text-xl font-semibold">Featured vendor list</h3>
-          <div class="rounded-2xl bg-soft-light px-4 py-2 text-sm dark:bg-soft-dark">Commission tier view</div>
-        </div>
+    <template v-else>
+      <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <AdminStatCard v-for="item in stats" :key="item.label" :label="item.label" :value="item.value" :note="item.note" accent />
+      </section>
 
-        <div class="mt-6 grid gap-4 md:grid-cols-2">
-          <article v-for="vendor in vendors" :key="vendor.name" class="rounded-[1.75rem] border border-line-light bg-soft-light p-5 dark:border-line-dark dark:bg-soft-dark">
-            <div class="flex items-start justify-between gap-4">
-              <div>
-                <p class="text-lg font-semibold">{{ vendor.name }}</p>
-                <p class="mt-1 text-sm text-muted-light dark:text-muted-dark">{{ vendor.category }}</p>
-              </div>
-              <span class="rounded-full bg-brand/15 px-3 py-1 text-xs font-medium text-brand">{{ vendor.rating }}</span>
+      <section class="grid gap-4 lg:grid-cols-2">
+        <AdminPanelCard title="Verification" accent>
+          <div class="space-y-2">
+            <div v-for="item in verification" :key="item.label" class="flex items-center justify-between rounded-2xl bg-brand/10 px-4 py-3 dark:bg-brand/10">
+              <span class="text-sm text-slate-600 dark:text-slate-300">{{ item.label }}</span>
+              <span class="font-semibold">{{ item.value }}</span>
             </div>
-            <div class="mt-6 flex items-center justify-between text-sm">
-              <span class="text-muted-light dark:text-muted-dark">{{ vendor.orders }}</span>
-              <span class="rounded-full bg-black px-3 py-1 text-xs text-white dark:bg-white dark:text-black">{{ vendor.status }}</span>
-            </div>
-          </article>
-        </div>
-      </div>
+          </div>
+        </AdminPanelCard>
 
-      <div class="rounded-[2rem] border border-line-light bg-panel-light p-6 dark:border-line-dark dark:bg-panel-dark">
-        <h3 class="text-xl font-semibold">Onboarding pipeline</h3>
-        <div class="mt-6 space-y-4">
-          <article v-for="item in onboarding" :key="item.stage" class="rounded-[1.5rem] bg-soft-light p-4 dark:bg-soft-dark">
-            <div class="flex items-center justify-between">
-              <p class="font-medium">{{ item.stage }}</p>
-              <span class="rounded-full bg-brand/15 px-3 py-1 text-xs font-medium text-brand">{{ item.count }}</span>
+        <AdminPanelCard title="Important profile fields" accent>
+          <div class="space-y-2">
+            <div v-for="item in fields" :key="item" class="rounded-2xl bg-brand/10 px-4 py-3 text-sm text-slate-700 dark:bg-brand/10 dark:text-slate-300">
+              {{ item }}
             </div>
-          </article>
-        </div>
-      </div>
-    </section>
+          </div>
+        </AdminPanelCard>
+      </section>
+    </template>
   </div>
 </template>

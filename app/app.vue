@@ -30,6 +30,8 @@ watch(theme, (value) => {
 <template>
   <div class="min-h-screen">
     <NuxtRouteAnnouncer />
-    <NuxtPage />
+    <NuxtLayout>
+      <NuxtPage />
+    </NuxtLayout>
   </div>
 </template>

@@ -3,56 +3,159 @@ definePageMeta({
   layout: 'admin'
 })
 
-const queues = [
-  { name: 'Open tickets', count: '34', note: '11 from today' },
-  { name: 'Escalations', count: '07', note: '2 need finance input' },
-  { name: 'Avg. response', count: '4m 12s', note: 'Down 18% this week' }
-]
+interface ProductRow {
+  id: number
+  name: string
+  is_active: boolean | null
+  created_at: string | null
+}
 
-const tickets = [
-  { id: 'SUP-402', subject: 'Missing rider update', owner: 'Aline', priority: 'High' },
-  { id: 'SUP-401', subject: 'Refund follow-up', owner: 'Merveille', priority: 'Medium' },
-  { id: 'SUP-400', subject: 'Vendor prep complaint', owner: 'Claude', priority: 'High' }
-]
+interface MovieRow {
+  id: string
+  title: string
+  is_published: boolean | null
+  updated_at: string | null
+}
+
+const { $supabase } = useNuxtApp()
+const { onAction, downloadJson } = useAdminPageActions()
+
+const loading = ref(true)
+const errorMessage = ref<string | null>(null)
+const recentProducts = ref<ProductRow[]>([])
+const recentMovies = ref<MovieRow[]>([])
+
+const metrics = reactive({
+  products: 0,
+  activeProducts: 0,
+  movies: 0,
+  publishedMovies: 0,
+  articles: 0,
+  publishedArticles: 0,
+  guides: 0,
+  publishedGuides: 0
+})
+
+const getCount = async (builder: Promise<{ count: number | null, error: { message: string } | null }>) => {
+  const { count, error } = await builder
+  if (error) throw new Error(error.message)
+  return count ?? 0
+}
+
+const loadContent = async () => {
+  if (!import.meta.client) return
+
+  loading.value = true
+  errorMessage.value = null
+
+  try {
+    const [products, activeProducts, movies, publishedMovies, articles, publishedArticles, guides, publishedGuides, productsResult, moviesResult] = await Promise.all([
+      getCount($supabase.from('products').select('*', { count: 'exact', head: true })),
+      getCount($supabase.from('products').select('*', { count: 'exact', head: true }).eq('is_active', true)),
+      getCount($supabase.from('movies').select('*', { count: 'exact', head: true })),
+      getCount($supabase.from('movies').select('*', { count: 'exact', head: true }).eq('is_published', true)),
+      getCount($supabase.from('kakofi_articles').select('*', { count: 'exact', head: true })),
+      getCount($supabase.from('kakofi_articles').select('*', { count: 'exact', head: true }).eq('status', 'published')),
+      getCount($supabase.from('kakofi_guides').select('*', { count: 'exact', head: true })),
+      getCount($supabase.from('kakofi_guides').select('*', { count: 'exact', head: true }).eq('status', 'published')),
+      $supabase.from('products').select('id, name, is_active, created_at').order('created_at', { ascending: false }).limit(5),
+      $supabase.from('movies').select('id, title, is_published, updated_at').order('updated_at', { ascending: false }).limit(5)
+    ])
+
+    if (productsResult.error) throw new Error(productsResult.error.message)
+    if (moviesResult.error) throw new Error(moviesResult.error.message)
+
+    Object.assign(metrics, {
+      products,
+      activeProducts,
+      movies,
+      publishedMovies,
+      articles,
+      publishedArticles,
+      guides,
+      publishedGuides
+    })
+
+    recentProducts.value = (productsResult.data ?? []) as ProductRow[]
+    recentMovies.value = (moviesResult.data ?? []) as MovieRow[]
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Unable to load content data.'
+  } finally {
+    loading.value = false
+  }
+}
+
+const stats = computed(() => [
+  { label: 'Products', value: String(metrics.products), note: `${metrics.activeProducts} active` },
+  { label: 'Movies', value: String(metrics.movies), note: `${metrics.publishedMovies} published` },
+  { label: 'Articles', value: String(metrics.articles), note: `${metrics.publishedArticles} published` },
+  { label: 'Guides', value: String(metrics.guides), note: `${metrics.publishedGuides} published` }
+])
+
+const formatDate = (value: string | null) => {
+  if (!value) return '—'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
+}
+
+onAction('content-export', () => {
+  downloadJson('content-summary.json', {
+    exportedAt: new Date().toISOString(),
+    metrics: { ...metrics },
+    recentProducts: recentProducts.value,
+    recentMovies: recentMovies.value
+  })
+})
+
+onMounted(() => {
+  loadContent()
+})
 </script>
 
 <template>
-  <div>
-    <section class="mt-8 grid gap-4 md:grid-cols-3">
-      <article v-for="queue in queues" :key="queue.name" class="rounded-[1.75rem] border border-line-light bg-panel-light p-6 dark:border-line-dark dark:bg-panel-dark">
-        <p class="text-sm text-muted-light dark:text-muted-dark">{{ queue.name }}</p>
-        <p class="mt-3 text-3xl font-semibold">{{ queue.count }}</p>
-        <p class="mt-2 text-sm text-muted-light dark:text-muted-dark">{{ queue.note }}</p>
-      </article>
-    </section>
+  <div class="space-y-6">
+    <div v-if="errorMessage" class="rounded-3xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">
+      {{ errorMessage }}
+    </div>
 
-    <section class="mt-6 grid gap-4 2xl:grid-cols-[1.45fr_1fr]">
-      <div class="rounded-[2rem] border border-line-light bg-panel-light p-6 dark:border-line-dark dark:bg-panel-dark">
-        <div class="flex items-center justify-between">
-          <h3 class="text-xl font-semibold">Priority inbox</h3>
-          <div class="rounded-2xl bg-soft-light px-4 py-2 text-sm dark:bg-soft-dark">Live queue</div>
-        </div>
+    <div v-if="loading" class="rounded-3xl border border-slate-200 bg-white p-5 text-sm text-slate-500 dark:border-white/10 dark:bg-[#111214] dark:text-slate-400">
+      Loading content data...
+    </div>
 
-        <div class="mt-6 space-y-4">
-          <article v-for="ticket in tickets" :key="ticket.id" class="rounded-[1.75rem] border border-line-light bg-soft-light p-5 dark:border-line-dark dark:bg-soft-dark">
-            <div class="flex items-start justify-between gap-4">
-              <div>
-                <p class="font-semibold">{{ ticket.subject }}</p>
-                <p class="mt-1 text-sm text-muted-light dark:text-muted-dark">{{ ticket.id }} • Owner: {{ ticket.owner }}</p>
-              </div>
-              <span class="rounded-full bg-brand/15 px-3 py-1 text-xs font-medium text-brand">{{ ticket.priority }}</span>
+    <template v-else>
+      <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <AdminStatCard v-for="item in stats" :key="item.label" :label="item.label" :value="item.value" :note="item.note" accent />
+      </section>
+
+      <section class="grid gap-4 lg:grid-cols-2">
+        <AdminPanelCard title="Recent products" accent>
+          <div v-if="recentProducts.length === 0" class="rounded-2xl bg-brand/10 px-4 py-3 text-sm text-slate-500 dark:bg-brand/10 dark:text-slate-400">
+            No product rows available.
+          </div>
+          <div v-else class="space-y-2">
+            <div v-for="row in recentProducts" :key="row.id" class="rounded-2xl bg-brand/10 px-4 py-3 dark:bg-brand/10">
+              <p class="text-sm font-medium text-slate-900 dark:text-white">{{ row.name }}</p>
+              <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                {{ row.is_active ? 'Active' : 'Inactive' }} • {{ formatDate(row.created_at) }}
+              </p>
             </div>
-          </article>
-        </div>
-      </div>
+          </div>
+        </AdminPanelCard>
 
-      <div class="rounded-[2rem] border border-brand/20 bg-gradient-to-br from-brand/20 via-brand/10 to-transparent p-6 dark:from-brand/15 dark:via-brand/8">
-        <p class="text-xs uppercase tracking-[0.28em] text-brand">Quality signal</p>
-        <h3 class="mt-4 text-2xl font-semibold">Support satisfaction remains stable at 4.7/5.</h3>
-        <p class="mt-4 text-sm leading-7 text-muted-light dark:text-muted-dark">
-          The UI is prepared for future chat streams, ticket filters, SLA tracking, and resolution analytics.
-        </p>
-      </div>
-    </section>
+        <AdminPanelCard title="Recent movies" accent>
+          <div v-if="recentMovies.length === 0" class="rounded-2xl bg-brand/10 px-4 py-3 text-sm text-slate-500 dark:bg-brand/10 dark:text-slate-400">
+            No movie rows available.
+          </div>
+          <div v-else class="space-y-2">
+            <div v-for="row in recentMovies" :key="row.id" class="rounded-2xl bg-brand/10 px-4 py-3 dark:bg-brand/10">
+              <p class="text-sm font-medium text-slate-900 dark:text-white">{{ row.title }}</p>
+              <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                {{ row.is_published ? 'Published' : 'Draft' }} • {{ formatDate(row.updated_at) }}
+              </p>
+            </div>
+          </div>
+        </AdminPanelCard>
+      </section>
+    </template>
   </div>
 </template>
