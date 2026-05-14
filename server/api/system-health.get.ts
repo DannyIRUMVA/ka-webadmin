@@ -77,45 +77,58 @@ const checkHttpService = async (service: Omit<ServiceCheck, 'status' | 'statusCo
 export default defineEventHandler(async () => {
   const config = useRuntimeConfig()
 
-  const services: Array<Omit<ServiceCheck, 'status' | 'statusCode' | 'latencyMs' | 'checkedAt' | 'details'>> = [
+  const services = [
     {
       id: 'supabase',
       name: 'Supabase backend',
       kind: 'backend',
-      url: `${config.public.supabaseUrl}/auth/v1/health`,
+      url: config.public.supabaseUrl ? `${config.public.supabaseUrl}/auth/v1/health` : null,
       description: 'Database, auth, API, and realtime foundation.'
     },
     {
       id: 'stripe-worker',
       name: 'Stripe worker',
       kind: 'worker',
-      url: 'https://stripe-worker.boyg87059.workers.dev/',
+      url: config.systemHealthStripeWorkerUrl || null,
       description: 'Handles Stripe payment workflows.'
     },
     {
       id: 'local-payment-worker',
       name: 'Rwanda payment worker',
       kind: 'worker',
-      url: 'https://kakofi-payment.boyg87059.workers.dev/',
+      url: config.systemHealthLocalPaymentWorkerUrl || null,
       description: 'Handles local Rwandan payment workflows.'
     },
     {
       id: 'r2-uploader-worker',
       name: 'R2 uploader worker',
       kind: 'storage',
-      url: 'https://r2-uploader.boyg87059.workers.dev/',
+      url: config.systemHealthR2UploaderWorkerUrl || null,
       description: 'Uploads and stores smaller files in R2.'
     },
     {
       id: 'mux',
       name: 'Mux media layer',
       kind: 'media',
-      url: 'https://status.mux.com/api/v2/status.json',
+      url: config.systemHealthMuxStatusUrl || null,
       description: 'Large media delivery and processing provider.'
     }
-  ]
+  ] satisfies Array<Omit<ServiceCheck, 'status' | 'statusCode' | 'latencyMs' | 'checkedAt' | 'details'>>
 
-  const checkedServices = await Promise.all(services.map(checkHttpService))
+  const checkedServices = await Promise.all(services.map(async (service) => {
+    if (!service.url) {
+      return {
+        ...service,
+        status: 'offline' as const,
+        statusCode: null,
+        latencyMs: null,
+        checkedAt: new Date().toISOString(),
+        details: 'Service URL is not configured in the environment.'
+      }
+    }
+
+    return checkHttpService(service)
+  }))
 
   const clientNodes: ServiceCheck[] = [
     {

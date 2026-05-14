@@ -77,10 +77,17 @@ const stats = computed(() => [
   { label: 'Payouts', value: String(metrics.payouts), note: 'Processed payout rows' }
 ])
 
+const financeHighlights = computed(() => [
+  { label: 'Successful transactions', value: String(metrics.successfulTransactions) },
+  { label: 'Platform revenue rows', value: String(metrics.platformRevenueRows) },
+  { label: 'Pending payout queue', value: String(metrics.payoutRequests) },
+  { label: 'Processed payout rows', value: String(metrics.payouts) }
+])
+
 const notes = computed(() => [
-  `Successful transactions: ${metrics.successfulTransactions}`,
-  `Platform revenue rows: ${metrics.platformRevenueRows}`,
-  'Finance is centered on transactions and ledger entries.'
+  'Finance now focuses on transactions, ledger movement, and payout queue visibility.',
+  'Detailed payout verification and review now lives under the dedicated Payouts page.',
+  'This page remains read-only and safe for shared production data.'
 ])
 
 const formatAmount = (amount: number | string, currency: string | null) => {
@@ -122,6 +129,21 @@ onMounted(() => {
       <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <AdminStatCard v-for="item in stats" :key="item.label" :label="item.label" :value="item.value" :note="item.note" accent />
       </section>
+
+      <AdminPanelCard title="Finance overview" subtitle="High-level revenue and payout queue visibility. Payout review has been moved to the dedicated Payouts page." badge="Read-only" accent>
+        <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+          <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div v-for="item in financeHighlights" :key="item.label" class="rounded-2xl bg-brand/10 px-4 py-4 dark:bg-brand/10">
+              <p class="text-sm text-slate-500 dark:text-slate-400">{{ item.label }}</p>
+              <p class="mt-2 text-2xl font-semibold">{{ item.value }}</p>
+            </div>
+          </div>
+
+          <NuxtLink to="/payouts" class="inline-flex items-center justify-center rounded-2xl bg-brand px-5 py-3 text-sm font-semibold text-black transition hover:brightness-95">
+            Open payouts
+          </NuxtLink>
+        </div>
+      </AdminPanelCard>
 
       <section class="grid gap-4 lg:grid-cols-2">
         <AdminPanelCard title="Recent ledger entries" accent>

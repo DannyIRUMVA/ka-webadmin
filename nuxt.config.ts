@@ -6,9 +6,14 @@ export default defineNuxtConfig({
   css: ['~/assets/css/tailwind.css'],
 
   runtimeConfig: {
+    supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+    systemHealthStripeWorkerUrl: process.env.SYSTEM_HEALTH_STRIPE_WORKER_URL || '',
+    systemHealthLocalPaymentWorkerUrl: process.env.SYSTEM_HEALTH_LOCAL_PAYMENT_WORKER_URL || '',
+    systemHealthR2UploaderWorkerUrl: process.env.SYSTEM_HEALTH_R2_UPLOADER_WORKER_URL || '',
+    systemHealthMuxStatusUrl: process.env.SYSTEM_HEALTH_MUX_STATUS_URL || '',
     public: {
-      supabaseUrl: process.env.NUXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://dlndxvnjwkehaggstlik.supabase.co',
-      supabaseAnonKey: process.env.NUXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRsbmR4dm5qd2tlaGFnZ3N0bGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE4ODkxNDgsImV4cCI6MjA2NzQ2NTE0OH0.-wjVsaXpFuCGRbGbR3ugRzGgjues_zj1FTPvK9lJcqE'
+      supabaseUrl: process.env.NUXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '',
+      supabaseAnonKey: process.env.NUXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ''
     }
   },
 

@@ -6,8 +6,8 @@ export default defineNuxtPlugin(() => {
   const supabaseUrl = config.public.supabaseUrl
   const supabaseAnonKey = config.public.supabaseAnonKey
 
-  if (!process.env.NUXT_PUBLIC_SUPABASE_URL || !process.env.NUXT_PUBLIC_SUPABASE_ANON_KEY) {
-    console.warn('[kakofi-admin] Using built-in Kakofi Supabase public config. You can override it with NUXT_PUBLIC_SUPABASE_URL and NUXT_PUBLIC_SUPABASE_ANON_KEY.')
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('[kakofi-admin] Missing Supabase public runtime config. Set NUXT_PUBLIC_SUPABASE_URL and NUXT_PUBLIC_SUPABASE_ANON_KEY in your environment.')
   }
 
   const supabase = createClient(supabaseUrl, supabaseAnonKey, {

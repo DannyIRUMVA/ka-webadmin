@@ -17,19 +17,19 @@ const pageMeta = computed(() => {
       description: 'Simple visibility into creators, audience, transactions, content, and finance.',
       action: 'Export overview'
     },
-    '/orders': {
+    '/transactions': {
       eyebrow: 'Transactions',
       title: 'Transactions',
       description: 'Review purchase volume and payment status across products and media.',
       action: 'Export transactions'
     },
-    '/vendors': {
+    '/creators': {
       eyebrow: 'Creators',
       title: 'Creators',
       description: 'Track creator verification, KYC status, and account distribution.',
       action: 'Review creators'
     },
-    '/customers': {
+    '/audience': {
       eyebrow: 'Audience',
       title: 'Audience',
       description: 'Review guest traffic, client records, and audience health.',
@@ -41,7 +41,13 @@ const pageMeta = computed(() => {
       description: 'Monitor revenue, ledger movement, and payout readiness.',
       action: 'Download report'
     },
-    '/support': {
+    '/payouts': {
+      eyebrow: 'Payouts',
+      title: 'Payouts',
+      description: 'Review payout requests and validate creator payout details before approval.',
+      action: 'Export payouts'
+    },
+    '/content': {
       eyebrow: 'Content',
       title: 'Content',
       description: 'Track products, movies, articles, and guides.',
@@ -67,11 +73,11 @@ const pageMeta = computed(() => {
 const navGroups = computed(() => [
   {
     title: 'Main',
-    items: navigation.slice(0, 5)
+    items: navigation.slice(0, 6)
   },
   {
     title: 'Workspace',
-    items: navigation.slice(5)
+    items: navigation.slice(6)
   }
 ])
 
@@ -96,11 +102,12 @@ const navInitial = (name: string) => name.charAt(0).toUpperCase()
 
 const actionEventByRoute: Record<string, string> = {
   '/dashboard': 'dashboard-export',
-  '/orders': 'transactions-export',
-  '/vendors': 'creators-export',
-  '/customers': 'audience-export',
+  '/transactions': 'transactions-export',
+  '/creators': 'creators-export',
+  '/audience': 'audience-export',
   '/finance': 'finance-export',
-  '/support': 'content-export',
+  '/payouts': 'payouts-export',
+  '/content': 'content-export',
   '/system': 'system-refresh',
   '/settings': 'settings-export'
 }

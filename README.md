@@ -20,6 +20,30 @@ yarn install
 bun install
 ```
 
+## Environment
+
+Copy the example file and fill in your real values:
+
+```bash
+cp .env.example .env
+```
+
+Required app/runtime values:
+
+```bash
+NUXT_PUBLIC_SUPABASE_URL=...
+NUXT_PUBLIC_SUPABASE_ANON_KEY=...
+SYSTEM_HEALTH_STRIPE_WORKER_URL=...
+SYSTEM_HEALTH_LOCAL_PAYMENT_WORKER_URL=...
+SYSTEM_HEALTH_R2_UPLOADER_WORKER_URL=...
+SYSTEM_HEALTH_MUX_STATUS_URL=...
+```
+
+Notes:
+- `NUXT_PUBLIC_*` values are exposed to the browser by Nuxt, so only use public-safe values there.
+- Do not commit `.env`.
+- For Cloudflare deployment, mirror these values in the Pages/Workers environment settings.
+
 ## Development Server
 
 Start the development server on `http://localhost:3000`:
@@ -93,15 +117,10 @@ Extra command:
 
 Configured MCP endpoint:
 
-```json
-{
-  "mcpServers": {
-    "supabase": {
-      "type": "http",
-      "url": "https://mcp.supabase.com/mcp?project_ref=dlndxvnjwkehaggstlik"
-    }
-  }
-}
+```bash
+SUPABASE_PROJECT_REF=...
+# or
+SUPABASE_MCP_URL=https://mcp.supabase.com/mcp?project_ref=...
 ```
 
 Because these resources live under `.pi/extensions/` and `.pi/skills/`, pi should auto-discover them for this project.

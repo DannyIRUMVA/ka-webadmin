@@ -3,11 +3,37 @@ definePageMeta({
   layout: 'admin'
 })
 
+type HealthState = 'online' | 'reachable' | 'degraded' | 'offline'
+
+type ServiceCheck = {
+  id: string
+  name: string
+  kind: 'backend' | 'worker' | 'storage' | 'media' | 'client'
+  url: string | null
+  description: string
+  status: HealthState
+  statusCode: number | null
+  latencyMs: number | null
+  checkedAt: string
+  details: string
+}
+
+type HealthPayload = {
+  checkedAt: string
+  services: ServiceCheck[]
+}
+
+const AUTO_REFRESH_MS = 45000
+
 const { $supabase } = useNuxtApp()
 const { onAction, downloadJson } = useAdminPageActions()
 
 const loading = ref(true)
+const refreshing = ref(false)
+const healthRefreshing = ref(false)
 const errorMessage = ref<string | null>(null)
+const healthErrorMessage = ref<string | null>(null)
+const systemPayload = ref<HealthPayload | null>(null)
 
 const metrics = reactive({
   profilesTotal: 0,
@@ -31,16 +57,23 @@ const metrics = reactive({
   payoutRequestsTotal: 0
 })
 
+let refreshInterval: ReturnType<typeof setInterval> | null = null
+
 const getCount = async (builder: Promise<{ count: number | null, error: { message: string } | null }>) => {
   const { count, error } = await builder
   if (error) throw new Error(error.message)
   return count ?? 0
 }
 
-const loadDashboard = async () => {
+const loadDashboard = async (background = false) => {
   if (!import.meta.client) return
 
-  loading.value = true
+  if (background && !loading.value) {
+    refreshing.value = true
+  } else {
+    loading.value = true
+  }
+
   errorMessage.value = null
 
   try {
@@ -111,7 +144,33 @@ const loadDashboard = async () => {
     errorMessage.value = error instanceof Error ? error.message : 'Unable to load dashboard data.'
   } finally {
     loading.value = false
+    refreshing.value = false
   }
+}
+
+const loadSystemHealth = async (background = false) => {
+  if (!import.meta.client) return
+
+  if (background && systemPayload.value) {
+    healthRefreshing.value = true
+  }
+
+  healthErrorMessage.value = null
+
+  try {
+    systemPayload.value = await $fetch<HealthPayload>('/api/system-health')
+  } catch (error) {
+    healthErrorMessage.value = error instanceof Error ? error.message : 'Unable to load system health.'
+  } finally {
+    healthRefreshing.value = false
+  }
+}
+
+const refreshAll = async (background = true) => {
+  await Promise.allSettled([
+    loadDashboard(background),
+    loadSystemHealth(background)
+  ])
 }
 
 const publishedContentTotal = computed(() => metrics.moviesPublished + metrics.articlesPublished + metrics.guidesPublished)
@@ -172,16 +231,59 @@ const sections = computed(() => [
   }
 ])
 
+const systemServices = computed(() => systemPayload.value?.services ?? [])
+
+const healthSummary = computed(() => {
+  const counts = {
+    online: 0,
+    reachable: 0,
+    degraded: 0,
+    offline: 0
+  }
+
+  for (const service of systemServices.value) {
+    counts[service.status] += 1
+  }
+
+  return [
+    { label: 'Online', value: counts.online, tone: 'text-emerald-600 dark:text-emerald-400' },
+    { label: 'Reachable', value: counts.reachable, tone: 'text-amber-600 dark:text-amber-400' },
+    { label: 'Degraded', value: counts.degraded, tone: 'text-orange-600 dark:text-orange-400' },
+    { label: 'Offline', value: counts.offline, tone: 'text-rose-600 dark:text-rose-400' }
+  ]
+})
+
+const checkedAtLabel = computed(() => {
+  if (!systemPayload.value?.checkedAt) {
+    return 'Not checked yet'
+  }
+
+  return new Date(systemPayload.value.checkedAt).toLocaleString()
+})
+
 onAction('dashboard-export', () => {
   downloadJson('dashboard-overview.json', {
     exportedAt: new Date().toISOString(),
     metrics: { ...metrics },
-    publishedContentTotal: publishedContentTotal.value
+    publishedContentTotal: publishedContentTotal.value,
+    systemHealth: systemPayload.value
   })
 })
 
-onMounted(() => {
-  loadDashboard()
+onMounted(async () => {
+  await refreshAll(false)
+
+  refreshInterval = window.setInterval(() => {
+    if (document.visibilityState === 'visible') {
+      refreshAll(true)
+    }
+  }, AUTO_REFRESH_MS)
+})
+
+onBeforeUnmount(() => {
+  if (refreshInterval) {
+    clearInterval(refreshInterval)
+  }
 })
 </script>
 
@@ -206,6 +308,42 @@ onMounted(() => {
           accent
         />
       </section>
+
+      <AdminPanelCard title="Live system snapshot" subtitle="Real architecture view from the current health endpoint across Supabase, Cloudflare workers, Mux, web, and mobile." badge="Live architecture" accent>
+        <div class="space-y-5">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p class="text-sm text-slate-500 dark:text-slate-400">Last checked: {{ checkedAtLabel }}</p>
+              <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Auto-refreshes every 45 seconds when this tab is visible.</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <div class="rounded-full bg-brand/10 px-3 py-2 text-xs font-medium text-brand">
+                {{ healthRefreshing || refreshing ? 'Refreshing live data…' : 'Background refresh active' }}
+              </div>
+              <NuxtLink to="/system" class="inline-flex items-center justify-center rounded-2xl bg-brand px-4 py-3 text-sm font-semibold text-black transition hover:brightness-95">
+                Open system page
+              </NuxtLink>
+            </div>
+          </div>
+
+          <div v-if="healthErrorMessage" class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">
+            {{ healthErrorMessage }}
+          </div>
+
+          <div v-else class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div
+              v-for="item in healthSummary"
+              :key="item.label"
+              class="rounded-2xl bg-brand/10 px-4 py-4 dark:bg-brand/10"
+            >
+              <p class="text-sm text-slate-500 dark:text-slate-400">{{ item.label }}</p>
+              <p class="mt-2 text-2xl font-semibold" :class="item.tone">{{ item.value }}</p>
+            </div>
+          </div>
+
+          <AdminSystemArchitectureCanvas v-if="systemServices.length" :services="systemServices" compact />
+        </div>
+      </AdminPanelCard>
 
       <AdminPanelCard title="Overview" subtitle="Simple summary of the current platform data." badge="Read-only" accent>
         <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

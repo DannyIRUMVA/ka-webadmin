@@ -12,8 +12,8 @@ import {
 } from "@mariozechner/pi-coding-agent";
 import { StringEnum, Type } from "@mariozechner/pi-ai";
 
-const SUPABASE_MCP_URL = "https://mcp.supabase.com/mcp?project_ref=dlndxvnjwkehaggstlik";
 const SUPABASE_AUTH_ENV_NAMES = ["SUPABASE_ACCESS_TOKEN", "SUPABASE_MCP_ACCESS_TOKEN", "SUPABASE_MCP_BEARER_TOKEN"] as const;
+const SUPABASE_MCP_URL_ENV_NAMES = ["SUPABASE_MCP_URL", "SUPABASE_PROJECT_REF"] as const;
 const CLIENT_NAME = "kakofi-webadmin-supabase-mcp";
 const CLIENT_VERSION = "1.0.0";
 const PROTOCOL_VERSION = "2025-03-26";
@@ -40,6 +40,18 @@ function getSupabaseAuthToken(): string | undefined {
 		if (value) return value;
 	}
 	return undefined;
+}
+
+function getSupabaseMcpUrl(): string {
+	const directUrl = process.env.SUPABASE_MCP_URL?.trim();
+	if (directUrl) return directUrl;
+
+	const projectRef = process.env.SUPABASE_PROJECT_REF?.trim();
+	if (projectRef) {
+		return `https://mcp.supabase.com/mcp?project_ref=${encodeURIComponent(projectRef)}`;
+	}
+
+	throw new Error(`Missing Supabase MCP URL configuration (set ${SUPABASE_MCP_URL_ENV_NAMES.join(" or ")}).`);
 }
 
 function parseJsonText(input: string): unknown {
@@ -244,7 +256,7 @@ class SupabaseMcpClient {
 			headers["mcp-session-id"] = this.sessionId;
 		}
 
-		const response = await fetch(SUPABASE_MCP_URL, {
+		const response = await fetch(getSupabaseMcpUrl(), {
 			method: "POST",
 			headers,
 			body: JSON.stringify(payload),
@@ -355,14 +367,14 @@ export default function supabaseMcpExtension(pi: ExtensionAPI) {
 		async execute(_toolCallId, params, signal) {
 			if (params.action === "list_tools") {
 				const tools = await client.listTools(signal, params.refresh ?? false);
-				const fullText = [`Supabase MCP URL: ${SUPABASE_MCP_URL}`, "", formatToolList(tools)].join("\n");
+				const fullText = [`Supabase MCP URL: ${getSupabaseMcpUrl()}`, "", formatToolList(tools)].join("\n");
 				const truncated = await truncateForModel(fullText);
 
 				return {
 					content: [{ type: "text", text: truncated.text }],
 					details: {
 						action: params.action,
-						url: SUPABASE_MCP_URL,
+						url: getSupabaseMcpUrl(),
 						toolCount: tools.length,
 						tools,
 						truncated: truncated.truncated,
@@ -393,7 +405,7 @@ export default function supabaseMcpExtension(pi: ExtensionAPI) {
 				content: [{ type: "text", text: truncated.text }],
 				details: {
 					action: params.action,
-					url: SUPABASE_MCP_URL,
+					url: getSupabaseMcpUrl(),
 					name: params.name,
 					arguments: parsedArguments,
 					result,
